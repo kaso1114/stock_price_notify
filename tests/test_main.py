@@ -6,7 +6,13 @@ from urllib.error import HTTPError
 
 import pytest
 
-from main import NotifierError, extract_latest_vix_price, fetch_latest_vix_price, run
+from main import (
+    NotifierError,
+    extract_latest_vix_price,
+    fetch_latest_vix_price,
+    run,
+    send_discord_webhook,
+)
 
 
 class FakeResponse:
@@ -139,6 +145,15 @@ def test_run_returns_nonzero_when_discord_webhook_fails() -> None:
     assert "HTTP 500" in stderr.getvalue()
 
 
+def test_send_discord_webhook_includes_http_error_body() -> None:
+    def opener(request, timeout):
+        body = io.BytesIO(b'{"message":"Unknown Webhook","code":10015}')
+        raise HTTPError(request.full_url, 403, "Forbidden", hdrs=None, fp=body)
+
+    with pytest.raises(NotifierError, match='HTTP 403. Response body: {"message":"Unknown Webhook","code":10015}'):
+        send_discord_webhook_with_opener(opener)
+
+
 def test_fetch_latest_vix_price_wraps_http_error() -> None:
     def opener(request, timeout):
         raise HTTPError(request.full_url, 503, "Service Unavailable", hdrs=None, fp=None)
@@ -152,3 +167,10 @@ def fetch_latest_vix_price_with_opener(opener) -> float:
 
     with patch("main.urlopen", opener):
         return fetch_latest_vix_price()
+
+
+def send_discord_webhook_with_opener(opener) -> None:
+    from unittest.mock import patch
+
+    with patch("main.urlopen", opener):
+        send_discord_webhook("https://example.test/webhook", "test payload")

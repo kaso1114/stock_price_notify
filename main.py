@@ -34,6 +34,32 @@ def _format_price(value: float) -> str:
     return f"{value:.2f}"
 
 
+def _read_response_body(response: Any) -> str:
+    try:
+        raw_body = response.read()
+    except OSError:
+        return ""
+
+    if isinstance(raw_body, bytes):
+        body = raw_body.decode("utf-8", errors="replace")
+    else:
+        body = str(raw_body)
+
+    body = body.strip()
+    if not body:
+        return ""
+
+    if len(body) > 500:
+        return f"{body[:497]}..."
+    return body
+
+
+def _format_response_body_suffix(body: str) -> str:
+    if not body:
+        return ""
+    return f" Response body: {body}"
+
+
 def get_webhook_url(env: Mapping[str, str]) -> str:
     webhook_url = env.get("DISCORD_WEBHOOK_URL", "").strip()
     if not webhook_url:
@@ -126,13 +152,21 @@ def send_discord_webhook(webhook_url: str, content: str) -> None:
     try:
         with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             status = getattr(response, "status", None)
+            response_body = _read_response_body(response)
     except HTTPError as exc:
-        raise NotifierError(f"Discord webhook request failed: HTTP {exc.code}.") from exc
+        response_body = _read_response_body(exc)
+        raise NotifierError(
+            f"Discord webhook request failed: HTTP {exc.code}."
+            f"{_format_response_body_suffix(response_body)}"
+        ) from exc
     except URLError as exc:
         raise NotifierError(f"Discord webhook request failed: {exc.reason}.") from exc
 
     if status is not None and not 200 <= status < 300:
-        raise NotifierError(f"Discord webhook request failed: HTTP {status}.")
+        raise NotifierError(
+            f"Discord webhook request failed: HTTP {status}."
+            f"{_format_response_body_suffix(response_body)}"
+        )
 
 
 def run(
