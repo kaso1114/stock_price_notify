@@ -1,0 +1,35 @@
+name: VIX Alert
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 01:00 UTC = 09:00 Asia/Taipei
+    - cron: "0 1 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Check VIX and send alert
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VIX_THRESHOLD: "30"
+        run: uv run python main.py

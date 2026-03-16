@@ -1,0 +1,18 @@
+[project]
+name = "stock-price-notify"
+version = "0.1.0"
+description = "Fetch the latest VIX quote and notify Discord when it exceeds a threshold."
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2,<9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
