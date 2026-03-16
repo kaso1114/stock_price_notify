@@ -1,6 +1,6 @@
 # VIX Alert Notifier
 
-This project fetches the latest `^VIX` quote from Yahoo Finance and sends a Discord webhook alert when the value is greater than the configured threshold.
+This project fetches the latest `^VIX` quote from Yahoo Finance and sends a Discord webhook alert when the value matches the configured threshold rule.
 
 ## Requirements
 
@@ -22,8 +22,14 @@ $env:DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 Optional threshold override:
 
 ```powershell
-$env:VIX_THRESHOLD="30"
+$env:VIX_THRESHOLD=">=26"
 ```
+
+Supported `VIX_THRESHOLD` formats:
+
+- Comparator rules: `>26`, `>=26`, `<26`, `<=26`, `==26`
+- Legacy bare numbers such as `30`, which still mean `> 30`
+- If `VIX_THRESHOLD` is not set, the default rule is `> 30`
 
 Run the notifier:
 
@@ -36,7 +42,8 @@ uv run python main.py
 - Fetches the latest available VIX value from Yahoo Finance.
 - Uses `regularMarketPrice` first.
 - Falls back to the latest non-null daily `close` if `regularMarketPrice` is unavailable.
-- Sends a Discord message only when `VIX > VIX_THRESHOLD`.
+- Parses `VIX_THRESHOLD` as a comparison rule and sends a Discord message only when the latest VIX matches that rule.
+- Treats bare numeric values such as `30` as `> 30` for backward compatibility.
 - Exits with a non-zero status if Yahoo Finance or Discord returns an error, or if required configuration is missing.
 
 ## Tests
@@ -61,7 +68,13 @@ Repository variable supported by the workflow:
 
 - `VIX_THRESHOLD`
 
-If `VIX_THRESHOLD` is not set in GitHub Actions Variables, the script falls back to its default threshold of `30`.
+Recommended GitHub Actions variable value:
+
+```text
+>=26
+```
+
+If `VIX_THRESHOLD` is not set in GitHub Actions Variables, the script falls back to the default rule `> 30`.
 
 The workflow installs dependencies with `uv sync --frozen` and runs:
 

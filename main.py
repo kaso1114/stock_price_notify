@@ -5,6 +5,7 @@ import math
 import os
 import sys
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from numbers import Real
 from typing import Any, TextIO
 from urllib.error import HTTPError, URLError
@@ -17,6 +18,8 @@ USER_AGENT = (
 )
 REQUEST_TIMEOUT_SECONDS = 15
 DEFAULT_THRESHOLD = 30.0
+DEFAULT_THRESHOLD_OPERATOR = ">"
+SUPPORTED_THRESHOLD_OPERATORS = (">=", "<=", "==", ">", "<")
 
 PriceFetcher = Callable[[], float]
 WebhookSender = Callable[[str, str], None]
@@ -24,6 +27,12 @@ WebhookSender = Callable[[str, str], None]
 
 class NotifierError(RuntimeError):
     """Raised when the notifier cannot complete its work safely."""
+
+
+@dataclass(frozen=True)
+class ThresholdRule:
+    operator: str
+    value: float
 
 
 def _is_real_number(value: Any) -> bool:
@@ -67,20 +76,53 @@ def get_webhook_url(env: Mapping[str, str]) -> str:
     return webhook_url
 
 
-def get_threshold(env: Mapping[str, str]) -> float:
+def get_threshold_rule(env: Mapping[str, str]) -> ThresholdRule:
     raw_value = env.get("VIX_THRESHOLD")
     if raw_value is None or not raw_value.strip():
-        return DEFAULT_THRESHOLD
+        return ThresholdRule(DEFAULT_THRESHOLD_OPERATOR, DEFAULT_THRESHOLD)
+
+    stripped_value = raw_value.strip()
+    operator = DEFAULT_THRESHOLD_OPERATOR
+    raw_threshold = stripped_value
+    for candidate in SUPPORTED_THRESHOLD_OPERATORS:
+        if stripped_value.startswith(candidate):
+            operator = candidate
+            raw_threshold = stripped_value[len(candidate) :].strip()
+            break
+
+    if not raw_threshold:
+        raise NotifierError("VIX_THRESHOLD must include a number after the comparison operator.")
 
     try:
-        threshold = float(raw_value)
+        threshold = float(raw_threshold)
     except ValueError as exc:
-        raise NotifierError("VIX_THRESHOLD must be a valid number.") from exc
+        raise NotifierError(
+            "VIX_THRESHOLD must be a valid comparison rule like '>=26' or a bare number."
+        ) from exc
 
     if not math.isfinite(threshold):
-        raise NotifierError("VIX_THRESHOLD must be a finite number.")
+        raise NotifierError("VIX_THRESHOLD must use a finite number.")
 
-    return threshold
+    return ThresholdRule(operator, threshold)
+
+
+def format_threshold_rule(rule: ThresholdRule) -> str:
+    return f"{rule.operator} {_format_price(rule.value)}"
+
+
+def matches_threshold_rule(price: float, rule: ThresholdRule) -> bool:
+    if rule.operator == ">":
+        return price > rule.value
+    if rule.operator == ">=":
+        return price >= rule.value
+    if rule.operator == "<":
+        return price < rule.value
+    if rule.operator == "<=":
+        return price <= rule.value
+    if rule.operator == "==":
+        return price == rule.value
+
+    raise NotifierError(f"Unsupported VIX_THRESHOLD operator: {rule.operator}")
 
 
 def extract_latest_vix_price(payload: dict[str, Any]) -> float:
@@ -137,8 +179,8 @@ def fetch_latest_vix_price() -> float:
     return extract_latest_vix_price(payload)
 
 
-def build_alert_message(price: float, threshold: float) -> str:
-    return f"VIX alert: {_format_price(price)} is above threshold {_format_price(threshold)}."
+def build_alert_message(price: float, rule: ThresholdRule) -> str:
+    return f"VIX alert: {_format_price(price)} matched threshold rule {format_threshold_rule(rule)}."
 
 
 def send_discord_webhook(webhook_url: str, content: str) -> None:
@@ -182,18 +224,18 @@ def run(
 ) -> int:
     try:
         webhook_url = get_webhook_url(env)
-        threshold = get_threshold(env)
+        threshold_rule = get_threshold_rule(env)
         price = price_fetcher()
         print(
-            f"Latest VIX price: {_format_price(price)}; threshold: {_format_price(threshold)}",
+            f"Latest VIX price: {_format_price(price)}; threshold rule: {format_threshold_rule(threshold_rule)}",
             file=stdout,
         )
 
-        if price > threshold:
-            webhook_sender(webhook_url, build_alert_message(price, threshold))
+        if matches_threshold_rule(price, threshold_rule):
+            webhook_sender(webhook_url, build_alert_message(price, threshold_rule))
             print("Alert sent to Discord webhook.", file=stdout)
         else:
-            print("Threshold not exceeded; no alert sent.", file=stdout)
+            print("Threshold rule not matched; no alert sent.", file=stdout)
     except NotifierError as exc:
         print(f"Error: {exc}", file=stderr)
         return 1
