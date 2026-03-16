@@ -57,6 +57,12 @@ Repository secret required by the workflow:
 
 - `DISCORD_WEBHOOK_URL`
 
+Repository variable supported by the workflow:
+
+- `VIX_THRESHOLD`
+
+If `VIX_THRESHOLD` is not set in GitHub Actions Variables, the script falls back to its default threshold of `30`.
+
 The workflow installs dependencies with `uv sync --frozen` and runs:
 
 ```powershell

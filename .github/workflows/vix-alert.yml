@@ -31,5 +31,5 @@ jobs:
       - name: Check VIX and send alert
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          VIX_THRESHOLD: "30"
+          VIX_THRESHOLD: ${{ vars.VIX_THRESHOLD }}
         run: uv run python main.py
