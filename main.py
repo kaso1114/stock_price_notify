@@ -145,7 +145,11 @@ def send_discord_webhook(webhook_url: str, content: str) -> None:
     request = Request(
         webhook_url,
         data=json.dumps({"content": content}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+        },
         method="POST",
     )
 

@@ -147,6 +147,9 @@ def test_run_returns_nonzero_when_discord_webhook_fails() -> None:
 
 def test_send_discord_webhook_includes_http_error_body() -> None:
     def opener(request, timeout):
+        assert request.headers["User-agent"] == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        assert request.headers["Accept"] == "application/json"
+        assert request.headers["Content-type"] == "application/json"
         body = io.BytesIO(b'{"message":"Unknown Webhook","code":10015}')
         raise HTTPError(request.full_url, 403, "Forbidden", hdrs=None, fp=body)
 
