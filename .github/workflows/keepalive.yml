@@ -7,7 +7,7 @@ on:
     - cron: "20 0 * * 1"
 
 permissions:
-  actions: write
+  contents: write
 
 jobs:
   keepalive:
@@ -16,8 +16,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Keep scheduled workflows active
-        uses: gautamkrishnar/keepalive-workflow@v2.0.10
         with:
-          workflow_files: "vix-alert.yml, keepalive.yml"
+          persist-credentials: true
+
+      - name: Update keepalive marker
+        shell: bash
+        run: |
+          mkdir -p .github
+          printf 'last_keepalive_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > .github/keepalive
+
+      - name: Commit keepalive marker
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive
+          git commit -m "chore: keep scheduled workflows active" || exit 0
+          git push
