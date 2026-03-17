@@ -3,8 +3,8 @@ name: VIX Alert
 on:
   workflow_dispatch:
   schedule:
-    # 01:00 UTC = 09:00 Asia/Taipei
-    - cron: "0 1 * * 1-5"
+    # 00:45 UTC = 08:45 Asia/Taipei
+    - cron: "45 0 * * 1-5"
 
 permissions:
   contents: read
