@@ -1,0 +1,23 @@
+name: Keepalive Workflows
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 00:20 UTC Monday = 08:20 Asia/Taipei Monday
+    - cron: "20 0 * * 1"
+
+permissions:
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Keep scheduled workflows active
+        uses: gautamkrishnar/keepalive-workflow@v2.0.10
+        with:
+          workflow_files: "vix-alert.yml, keepalive.yml"
