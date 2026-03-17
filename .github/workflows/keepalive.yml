@@ -3,8 +3,8 @@ name: Keepalive Workflows
 on:
   workflow_dispatch:
   schedule:
-    # 00:20 UTC Monday = 08:20 Asia/Taipei Monday
-    - cron: "20 0 * * 1"
+    # 00:20 UTC = 08:20 Asia/Taipei on the 1st and 15th of each month
+    - cron: "20 0 1,15 * *"
 
 permissions:
   contents: write
