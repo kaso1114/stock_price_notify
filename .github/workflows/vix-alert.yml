@@ -22,14 +22,8 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Install dependencies
-        run: uv sync --frozen
-
       - name: Check VIX and send alert
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VIX_THRESHOLD: ${{ vars.VIX_THRESHOLD }}
-        run: uv run python main.py
+        run: python main.py
