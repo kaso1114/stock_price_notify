@@ -11,7 +11,7 @@ from typing import Any, TextIO
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-YAHOO_VIX_URL = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d"
+FUTUNN_VIX_URL = "https://www.futunn.com/hk/index/.VIX-US"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
@@ -67,6 +67,55 @@ def _format_response_body_suffix(body: str) -> str:
     if not body:
         return ""
     return f" Response body: {body}"
+
+
+def _extract_embedded_state_json(document: str, marker: str) -> dict[str, Any]:
+    marker_index = document.find(marker)
+    if marker_index < 0:
+        raise NotifierError("futunn page does not include embedded VIX state data.")
+
+    json_start = document.find("{", marker_index + len(marker))
+    if json_start < 0:
+        raise NotifierError("futunn embedded VIX state is missing its JSON object.")
+
+    depth = 0
+    in_string = False
+    escaped = False
+    json_end: int | None = None
+
+    for index in range(json_start, len(document)):
+        character = document[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+
+        if character == '"':
+            in_string = True
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                json_end = index + 1
+                break
+
+    if json_end is None:
+        raise NotifierError("futunn embedded VIX state JSON is incomplete.")
+
+    try:
+        payload = json.loads(document[json_start:json_end])
+    except json.JSONDecodeError as exc:
+        raise NotifierError("futunn embedded VIX state contains invalid JSON.") from exc
+
+    if not isinstance(payload, dict):
+        raise NotifierError("futunn embedded VIX state is not a JSON object.")
+
+    return payload
 
 
 def get_webhook_url(env: Mapping[str, str]) -> str:
@@ -128,54 +177,58 @@ def matches_threshold_rule(price: float, rule: ThresholdRule) -> bool:
 
 def extract_latest_vix_price(payload: dict[str, Any]) -> float:
     try:
-        result = payload["chart"]["result"][0]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise NotifierError("Yahoo Finance response is missing chart result data.") from exc
+        stock_info = payload["stock_info"]
+    except KeyError as exc:
+        raise NotifierError("futunn embedded state is missing stock_info.") from exc
 
-    meta = result.get("meta")
-    if isinstance(meta, dict):
-        regular_market_price = meta.get("regularMarketPrice")
-        if _is_real_number(regular_market_price):
-            return float(regular_market_price)
+    if not isinstance(stock_info, dict):
+        raise NotifierError("futunn embedded stock_info is not an object.")
+
+    price = stock_info.get("price")
+    if isinstance(price, str):
+        stripped_price = price.strip()
+        if stripped_price and stripped_price != "--":
+            try:
+                return float(stripped_price)
+            except ValueError:
+                pass
 
     try:
-        close_values = result["indicators"]["quote"][0]["close"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise NotifierError("Yahoo Finance response is missing VIX close prices.") from exc
+        minute_chart_data = payload["stock_charts_data"]["minuteChartsData"]["list"]
+    except (KeyError, TypeError) as exc:
+        raise NotifierError("futunn embedded state is missing minute chart prices.") from exc
 
-    if not isinstance(close_values, list):
-        raise NotifierError("Yahoo Finance close prices are not in the expected list format.")
+    if not isinstance(minute_chart_data, list):
+        raise NotifierError("futunn minute chart prices are not in the expected list format.")
 
-    for value in reversed(close_values):
-        if _is_real_number(value):
-            return float(value)
+    for item in reversed(minute_chart_data):
+        if not isinstance(item, dict):
+            continue
+        fallback_price = item.get("cc_price")
+        if _is_real_number(fallback_price):
+            return float(fallback_price)
 
-    raise NotifierError("Yahoo Finance response does not include a usable latest VIX price.")
+    raise NotifierError("futunn embedded state does not include a usable latest VIX price.")
 
 
 def fetch_latest_vix_price() -> float:
     request = Request(
-        YAHOO_VIX_URL,
+        FUTUNN_VIX_URL,
         headers={
-            "Accept": "application/json",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "User-Agent": USER_AGENT,
         },
     )
 
     try:
         with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            payload = json.load(response)
+            document = response.read().decode("utf-8", errors="replace")
     except HTTPError as exc:
-        raise NotifierError(
-            f"Failed to fetch VIX quote from Yahoo Finance: HTTP {exc.code}."
-        ) from exc
+        raise NotifierError(f"Failed to fetch VIX quote from futunn: HTTP {exc.code}.") from exc
     except URLError as exc:
-        raise NotifierError(f"Failed to fetch VIX quote from Yahoo Finance: {exc.reason}.") from exc
-    except json.JSONDecodeError as exc:
-        raise NotifierError("Yahoo Finance returned invalid JSON.") from exc
+        raise NotifierError(f"Failed to fetch VIX quote from futunn: {exc.reason}.") from exc
 
-    if not isinstance(payload, dict):
-        raise NotifierError("Yahoo Finance returned an unexpected JSON payload.")
+    payload = _extract_embedded_state_json(document, "window.__INITIAL_STATE__=")
 
     return extract_latest_vix_price(payload)
 

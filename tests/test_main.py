@@ -16,9 +16,12 @@ from main import (
 
 
 class FakeResponse:
-    def __init__(self, payload: object, status: int = 200) -> None:
+    def __init__(self, payload: str | bytes, status: int = 200) -> None:
         self.status = status
-        self._payload = json.dumps(payload).encode("utf-8")
+        if isinstance(payload, bytes):
+            self._payload = payload
+        else:
+            self._payload = payload.encode("utf-8")
 
     def read(self, size: int = -1) -> bytes:
         if size < 0:
@@ -66,6 +69,14 @@ def format_rule_text(raw_threshold: str) -> str:
         raise ValueError(f"Threshold is missing a comparison operator: {raw_threshold}")
 
     return f"{operator} {float(stripped_threshold):.2f}"
+
+
+def build_futunn_html(state: object) -> str:
+    return (
+        "<html><head></head><body>"
+        f'<script>window.__INITIAL_STATE__={json.dumps(state)};(function(){{}}());</script>'
+        "</body></html>"
+    )
 
 
 def test_run_sends_webhook_when_price_matches_inclusive_default_threshold() -> None:
@@ -188,30 +199,41 @@ def test_run_returns_nonzero_for_invalid_threshold_rules(
     assert message in stderr
 
 
-def test_extract_latest_vix_price_falls_back_to_latest_non_null_close() -> None:
+def test_extract_latest_vix_price_prefers_stock_info_price() -> None:
     payload = {
-        "chart": {
-            "result": [
-                {
-                    "meta": {"regularMarketPrice": None},
-                    "indicators": {
-                        "quote": [
-                            {
-                                "close": [None, 27.5, None, 29.75],
-                            }
-                        ]
-                    },
-                }
-            ]
-        }
+        "stock_info": {"price": "30.200"},
+        "stock_charts_data": {
+            "minuteChartsData": {
+                "list": [
+                    {"cc_price": 29.75},
+                ]
+            }
+        },
     }
 
-    assert extract_latest_vix_price(payload) == pytest.approx(29.75)
+    assert extract_latest_vix_price(payload) == pytest.approx(30.2)
 
 
-def test_fetch_latest_vix_price_raises_for_yahoo_http_error() -> None:
+def test_extract_latest_vix_price_falls_back_to_latest_minute_chart_price() -> None:
+    payload = {
+        "stock_info": {"price": "--"},
+        "stock_charts_data": {
+            "minuteChartsData": {
+                "list": [
+                    {"cc_price": None},
+                    {"cc_price": 29.75},
+                    {"cc_price": 30.18},
+                ]
+            }
+        },
+    }
+
+    assert extract_latest_vix_price(payload) == pytest.approx(30.18)
+
+
+def test_fetch_latest_vix_price_raises_for_futunn_http_error() -> None:
     def failing_fetcher() -> float:
-        raise NotifierError("Failed to fetch VIX quote from Yahoo Finance: HTTP 429.")
+        raise NotifierError("Failed to fetch VIX quote from futunn: HTTP 429.")
 
     calls: list[tuple[str, str]] = []
     stdout = io.StringIO()
@@ -230,12 +252,50 @@ def test_fetch_latest_vix_price_raises_for_yahoo_http_error() -> None:
     assert "HTTP 429" in stderr.getvalue()
 
 
-def test_fetch_latest_vix_price_raises_for_invalid_json_shape() -> None:
+def test_fetch_latest_vix_price_raises_when_embedded_state_is_missing() -> None:
     def opener(request, timeout):
-        return FakeResponse({"chart": {"result": []}})
+        return FakeResponse("<html><body>missing embedded state</body></html>")
 
-    with pytest.raises(NotifierError, match="missing chart result data"):
+    with pytest.raises(NotifierError, match="does not include embedded VIX state data"):
         fetch_latest_vix_price_with_opener(opener)
+
+
+def test_fetch_latest_vix_price_raises_when_embedded_state_json_is_invalid() -> None:
+    def opener(request, timeout):
+        return FakeResponse('<script>window.__INITIAL_STATE__={"stock_info": ;</script>')
+
+    with pytest.raises(NotifierError, match="JSON is incomplete|contains invalid JSON"):
+        fetch_latest_vix_price_with_opener(opener)
+
+
+def test_fetch_latest_vix_price_raises_when_embedded_state_shape_is_invalid() -> None:
+    def opener(request, timeout):
+        return FakeResponse(build_futunn_html({"stock_info": {}, "stock_charts_data": {}}))
+
+    with pytest.raises(NotifierError, match="missing minute chart prices"):
+        fetch_latest_vix_price_with_opener(opener)
+
+
+def test_fetch_latest_vix_price_parses_embedded_state_html() -> None:
+    def opener(request, timeout):
+        assert request.headers["User-agent"] == "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        assert "text/html" in request.headers["Accept"]
+        return FakeResponse(
+            build_futunn_html(
+                {
+                    "stock_info": {"price": "30.200"},
+                    "stock_charts_data": {
+                        "minuteChartsData": {
+                            "list": [
+                                {"cc_price": 30.18},
+                            ]
+                        }
+                    },
+                }
+            )
+        )
+
+    assert fetch_latest_vix_price_with_opener(opener) == pytest.approx(30.2)
 
 
 def test_run_returns_nonzero_when_discord_webhook_fails() -> None:
@@ -273,7 +333,7 @@ def test_fetch_latest_vix_price_wraps_http_error() -> None:
     def opener(request, timeout):
         raise HTTPError(request.full_url, 503, "Service Unavailable", hdrs=None, fp=None)
 
-    with pytest.raises(NotifierError, match="HTTP 503"):
+    with pytest.raises(NotifierError, match="futunn: HTTP 503"):
         fetch_latest_vix_price_with_opener(opener)
 
 

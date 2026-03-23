@@ -1,6 +1,6 @@
 # VIX 警示通知器
 
-這個專案會從 Yahoo Finance 取得最新的 `^VIX` 報價，並在數值符合設定的門檻規則時，透過 Discord webhook 發送通知。
+這個專案會從富途牛牛的 `.VIX-US` 頁面擷取最新 VIX 報價，並在數值符合設定的門檻規則時，透過 Discord webhook 發送通知。
 
 ## 需求
 
@@ -39,12 +39,12 @@ uv run python main.py
 
 ## 行為說明
 
-- 從 Yahoo Finance 取得最新可用的 VIX 數值。
-- 優先使用 `regularMarketPrice`。
-- 如果 `regularMarketPrice` 不可用，會退回使用最新一筆非空的每日 `close`。
+- 從富途牛牛 [`.VIX-US` 頁面](https://www.futunn.com/hk/index/.VIX-US) 的內嵌 `window.__INITIAL_STATE__` 取得最新可用的 VIX 數值。
+- 優先使用 `stock_info.price`。
+- 如果 `stock_info.price` 不可用，會退回使用 `stock_charts_data.minuteChartsData.list` 內最後一筆可用的 `cc_price`。
 - 將 `VIX_THRESHOLD` 解析為比較規則，只有在最新 VIX 符合規則時才發送 Discord 訊息。
 - `VIX_THRESHOLD` 必須明確包含比較運算子，例如 `>=30`。
-- 如果 Yahoo Finance 或 Discord 回傳錯誤，或缺少必要設定，程式會以非零狀態碼結束。
+- 如果富途牛牛或 Discord 回傳錯誤，或缺少必要設定，程式會以非零狀態碼結束。
 
 ## 測試
 
