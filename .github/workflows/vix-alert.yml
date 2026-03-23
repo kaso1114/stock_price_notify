@@ -5,6 +5,8 @@ on:
   schedule:
     # 00:00 UTC = 08:00 Asia/Taipei
     - cron: "0 0 * * 1-5"
+    # 14:30 UTC = 22:30 Asia/Taipei
+    - cron: "30 14 * * 1-5"
 
 permissions:
   contents: read
@@ -22,21 +24,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
-
-      - name: Wait until 08:30 Asia/Taipei
-        if: github.event_name == 'schedule'
-        shell: bash
-        run: |
-          target_epoch="$(TZ=Asia/Taipei date -d 'today 08:30' +%s)"
-          now_epoch="$(TZ=Asia/Taipei date +%s)"
-
-          if [ "$now_epoch" -lt "$target_epoch" ]; then
-            sleep_seconds="$((target_epoch - now_epoch))"
-            echo "Sleeping ${sleep_seconds} seconds until 08:30 Asia/Taipei."
-            sleep "$sleep_seconds"
-          else
-            echo "Already past 08:30 Asia/Taipei. Continuing immediately."
-          fi
 
       - name: Check VIX and send alert
         env:

@@ -56,9 +56,8 @@ uv run pytest
 
 Workflow 檔案：`.github/workflows/vix-alert.yml`
 
-- Action 觸發時間：週一到週五 `00:00 UTC`
-- 台灣時間觸發：週一到週五 `08:00 Asia/Taipei`
-- 程式執行時間：週一到週五 `08:30 Asia/Taipei`
+- Action 觸發時間：週一到週五 `00:00 UTC` 與 `14:30 UTC`
+- 台灣時間執行：週一到週五 `08:00 Asia/Taipei` 與 `22:30 Asia/Taipei`
 - 支援透過 `workflow_dispatch` 手動觸發
 
 Workflow 需要的 repository secret：
@@ -77,7 +76,7 @@ Workflow 支援的 repository variable：
 
 如果 GitHub Actions Variables 沒有設定 `VIX_THRESHOLD`，腳本會回退使用預設規則 `>= 30`。
 
-排程 workflow 會在 `08:00 Asia/Taipei` 啟動，於 GitHub Actions 內等待到 `08:30 Asia/Taipei` 後才執行通知程式。透過 `workflow_dispatch` 的手動執行則會略過等待，直接開始執行。
+排程 workflow 會在 `08:00 Asia/Taipei` 與 `22:30 Asia/Taipei` 直接執行通知程式。透過 `workflow_dispatch` 的手動執行也會直接開始執行。
 
 Workflow 會先用 `uv sync --frozen` 安裝相依套件，然後執行：
 
