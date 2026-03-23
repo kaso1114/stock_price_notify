@@ -1,52 +1,52 @@
-# VIX Alert Notifier
+# VIX 警示通知器
 
-This project fetches the latest `^VIX` quote from Yahoo Finance and sends a Discord webhook alert when the value matches the configured threshold rule.
+這個專案會從 Yahoo Finance 取得最新的 `^VIX` 報價，並在數值符合設定的門檻規則時，透過 Discord webhook 發送通知。
 
-## Requirements
+## 需求
 
 - Python 3.13
 - [`uv`](https://github.com/astral-sh/uv)
 
-## Local Setup
+## 本機設定
 
 ```powershell
 uv sync
 ```
 
-Set the required environment variable before running:
+執行前請先設定必要的環境變數：
 
 ```powershell
 $env:DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 ```
 
-Optional threshold override:
+可選的門檻覆寫設定：
 
 ```powershell
 $env:VIX_THRESHOLD=">=26"
 ```
 
-Supported `VIX_THRESHOLD` formats:
+支援的 `VIX_THRESHOLD` 格式：
 
-- Comparator rules: `>26`, `>=26`, `<26`, `<=26`, `==26`
-- Legacy bare numbers such as `30`, which still mean `> 30`
-- If `VIX_THRESHOLD` is not set, the default rule is `> 30`
+- 比較運算規則：`>26`、`>=26`、`<26`、`<=26`、`==26`
+- 舊格式純數字，例如 `30`，仍會被視為 `> 30`
+- 如果沒有設定 `VIX_THRESHOLD`，預設規則為 `> 30`
 
-Run the notifier:
+執行通知程式：
 
 ```powershell
 uv run python main.py
 ```
 
-## Behavior
+## 行為說明
 
-- Fetches the latest available VIX value from Yahoo Finance.
-- Uses `regularMarketPrice` first.
-- Falls back to the latest non-null daily `close` if `regularMarketPrice` is unavailable.
-- Parses `VIX_THRESHOLD` as a comparison rule and sends a Discord message only when the latest VIX matches that rule.
-- Treats bare numeric values such as `30` as `> 30` for backward compatibility.
-- Exits with a non-zero status if Yahoo Finance or Discord returns an error, or if required configuration is missing.
+- 從 Yahoo Finance 取得最新可用的 VIX 數值。
+- 優先使用 `regularMarketPrice`。
+- 如果 `regularMarketPrice` 不可用，會退回使用最新一筆非空的每日 `close`。
+- 將 `VIX_THRESHOLD` 解析為比較規則，只有在最新 VIX 符合規則時才發送 Discord 訊息。
+- 為了相容舊設定，像 `30` 這種純數字仍會被視為 `> 30`。
+- 如果 Yahoo Finance 或 Discord 回傳錯誤，或缺少必要設定，程式會以非零狀態碼結束。
 
-## Tests
+## 測試
 
 ```powershell
 uv run pytest
@@ -54,32 +54,32 @@ uv run pytest
 
 ## GitHub Actions
 
-Workflow file: `.github/workflows/vix-alert.yml`
+Workflow 檔案：`.github/workflows/vix-alert.yml`
 
-- Action trigger time: Monday to Friday, `00:00 UTC`
-- Action trigger time in Taiwan: Monday to Friday, `08:00 Asia/Taipei`
-- Program execution time in Taiwan: Monday to Friday, `08:30 Asia/Taipei`
-- Manual trigger: supported through `workflow_dispatch`
+- Action 觸發時間：週一到週五 `00:00 UTC`
+- 台灣時間觸發：週一到週五 `08:00 Asia/Taipei`
+- 程式執行時間：週一到週五 `08:30 Asia/Taipei`
+- 支援透過 `workflow_dispatch` 手動觸發
 
-Repository secret required by the workflow:
+Workflow 需要的 repository secret：
 
 - `DISCORD_WEBHOOK_URL`
 
-Repository variable supported by the workflow:
+Workflow 支援的 repository variable：
 
 - `VIX_THRESHOLD`
 
-Recommended GitHub Actions variable value:
+建議的 GitHub Actions 變數值：
 
 ```text
 >=26
 ```
 
-If `VIX_THRESHOLD` is not set in GitHub Actions Variables, the script falls back to the default rule `> 30`.
+如果 GitHub Actions Variables 沒有設定 `VIX_THRESHOLD`，腳本會回退使用預設規則 `> 30`。
 
-The scheduled workflow starts at `08:00 Asia/Taipei`, waits inside GitHub Actions until `08:30 Asia/Taipei`, and then runs the notifier. Manual runs through `workflow_dispatch` skip the wait and execute immediately.
+排程 workflow 會在 `08:00 Asia/Taipei` 啟動，於 GitHub Actions 內等待到 `08:30 Asia/Taipei` 後才執行通知程式。透過 `workflow_dispatch` 的手動執行則會略過等待，直接開始執行。
 
-The workflow installs dependencies with `uv sync --frozen` and runs:
+Workflow 會先用 `uv sync --frozen` 安裝相依套件，然後執行：
 
 ```powershell
 uv run python main.py
