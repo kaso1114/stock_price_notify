@@ -56,8 +56,8 @@ uv run pytest
 
 Workflow file: `.github/workflows/vix-alert.yml`
 
-- Scheduled time: Monday to Friday, `01:00 UTC`
-- Taiwan time: Monday to Friday, `09:00 Asia/Taipei`
+- Scheduled time: Monday to Friday, `00:30 UTC`
+- Taiwan time: Monday to Friday, `08:30 Asia/Taipei`
 - Manual trigger: supported through `workflow_dispatch`
 
 Repository secret required by the workflow:
