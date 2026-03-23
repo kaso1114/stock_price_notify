@@ -18,7 +18,7 @@ USER_AGENT = (
 )
 REQUEST_TIMEOUT_SECONDS = 15
 DEFAULT_THRESHOLD = 30.0
-DEFAULT_THRESHOLD_OPERATOR = ">"
+DEFAULT_THRESHOLD_OPERATOR = ">="
 SUPPORTED_THRESHOLD_OPERATORS = (">=", "<=", "==", ">", "<")
 
 PriceFetcher = Callable[[], float]
@@ -82,7 +82,7 @@ def get_threshold_rule(env: Mapping[str, str]) -> ThresholdRule:
         return ThresholdRule(DEFAULT_THRESHOLD_OPERATOR, DEFAULT_THRESHOLD)
 
     stripped_value = raw_value.strip()
-    operator = DEFAULT_THRESHOLD_OPERATOR
+    operator: str | None = None
     raw_threshold = stripped_value
     for candidate in SUPPORTED_THRESHOLD_OPERATORS:
         if stripped_value.startswith(candidate):
@@ -90,15 +90,16 @@ def get_threshold_rule(env: Mapping[str, str]) -> ThresholdRule:
             raw_threshold = stripped_value[len(candidate) :].strip()
             break
 
+    if operator is None:
+        raise NotifierError("VIX_THRESHOLD must start with a comparison operator such as '>=30'.")
+
     if not raw_threshold:
         raise NotifierError("VIX_THRESHOLD must include a number after the comparison operator.")
 
     try:
         threshold = float(raw_threshold)
     except ValueError as exc:
-        raise NotifierError(
-            "VIX_THRESHOLD must be a valid comparison rule like '>=26' or a bare number."
-        ) from exc
+        raise NotifierError("VIX_THRESHOLD must be a valid comparison rule like '>=26'.") from exc
 
     if not math.isfinite(threshold):
         raise NotifierError("VIX_THRESHOLD must use a finite number.")

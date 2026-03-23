@@ -28,8 +28,8 @@ $env:VIX_THRESHOLD=">=26"
 支援的 `VIX_THRESHOLD` 格式：
 
 - 比較運算規則：`>26`、`>=26`、`<26`、`<=26`、`==26`
-- 舊格式純數字，例如 `30`，仍會被視為 `> 30`
-- 如果沒有設定 `VIX_THRESHOLD`，預設規則為 `> 30`
+- 不支援未帶比較運算子的純數字格式，例如 `30`
+- 如果沒有設定 `VIX_THRESHOLD`，預設規則為 `>= 30`
 
 執行通知程式：
 
@@ -43,7 +43,7 @@ uv run python main.py
 - 優先使用 `regularMarketPrice`。
 - 如果 `regularMarketPrice` 不可用，會退回使用最新一筆非空的每日 `close`。
 - 將 `VIX_THRESHOLD` 解析為比較規則，只有在最新 VIX 符合規則時才發送 Discord 訊息。
-- 為了相容舊設定，像 `30` 這種純數字仍會被視為 `> 30`。
+- `VIX_THRESHOLD` 必須明確包含比較運算子，例如 `>=30`。
 - 如果 Yahoo Finance 或 Discord 回傳錯誤，或缺少必要設定，程式會以非零狀態碼結束。
 
 ## 測試
@@ -75,7 +75,7 @@ Workflow 支援的 repository variable：
 >=26
 ```
 
-如果 GitHub Actions Variables 沒有設定 `VIX_THRESHOLD`，腳本會回退使用預設規則 `> 30`。
+如果 GitHub Actions Variables 沒有設定 `VIX_THRESHOLD`，腳本會回退使用預設規則 `>= 30`。
 
 排程 workflow 會在 `08:00 Asia/Taipei` 啟動，於 GitHub Actions 內等待到 `08:30 Asia/Taipei` 後才執行通知程式。透過 `workflow_dispatch` 的手動執行則會略過等待，直接開始執行。
 

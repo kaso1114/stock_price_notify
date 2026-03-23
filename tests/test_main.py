@@ -54,7 +54,7 @@ def run_notifier(
 
 def format_rule_text(raw_threshold: str) -> str:
     stripped_threshold = raw_threshold.strip()
-    operator = ">"
+    operator = ""
 
     for candidate in (">=", "<=", "==", ">", "<"):
         if stripped_threshold.startswith(candidate):
@@ -62,13 +62,16 @@ def format_rule_text(raw_threshold: str) -> str:
             stripped_threshold = stripped_threshold[len(candidate) :].strip()
             break
 
+    if not operator:
+        raise ValueError(f"Threshold is missing a comparison operator: {raw_threshold}")
+
     return f"{operator} {float(stripped_threshold):.2f}"
 
 
-def test_run_sends_webhook_when_price_matches_legacy_numeric_threshold() -> None:
+def test_run_sends_webhook_when_price_matches_inclusive_default_threshold() -> None:
     exit_code, stdout, stderr, calls = run_notifier(
-        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook", "VIX_THRESHOLD": "30"},
-        price=31.25,
+        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook"},
+        price=30.0,
     )
 
     assert exit_code == 0
@@ -76,16 +79,16 @@ def test_run_sends_webhook_when_price_matches_legacy_numeric_threshold() -> None
     assert calls == [
         (
             "https://example.test/webhook",
-            "VIX alert: 31.25 matched threshold rule > 30.00.",
+            "VIX alert: 30.00 matched threshold rule >= 30.00.",
         )
     ]
-    assert "Latest VIX price: 31.25; threshold rule: > 30.00" in stdout
+    assert "Latest VIX price: 30.00; threshold rule: >= 30.00" in stdout
     assert "Alert sent to Discord webhook." in stdout
 
 
-def test_run_skips_webhook_when_legacy_numeric_threshold_is_not_matched() -> None:
+def test_run_skips_webhook_when_default_threshold_is_not_matched() -> None:
     exit_code, stdout, stderr, calls = run_notifier(
-        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook", "VIX_THRESHOLD": "30"},
+        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook"},
         price=29.95,
     )
 
@@ -95,17 +98,16 @@ def test_run_skips_webhook_when_legacy_numeric_threshold_is_not_matched() -> Non
     assert "Threshold rule not matched; no alert sent." in stdout
 
 
-def test_run_defaults_to_strict_greater_than_30_when_threshold_is_missing() -> None:
+def test_run_rejects_legacy_numeric_threshold_without_operator() -> None:
     exit_code, stdout, stderr, calls = run_notifier(
-        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook"},
+        {"DISCORD_WEBHOOK_URL": "https://example.test/webhook", "VIX_THRESHOLD": "30"},
         price=30.0,
     )
 
-    assert exit_code == 0
+    assert exit_code == 1
     assert calls == []
-    assert stderr == ""
-    assert "Latest VIX price: 30.00; threshold rule: > 30.00" in stdout
-    assert "Threshold rule not matched; no alert sent." in stdout
+    assert stdout == ""
+    assert "must start with a comparison operator" in stderr
 
 
 @pytest.mark.parametrize(
@@ -164,10 +166,10 @@ def test_run_supports_strict_operator_thresholds_away_from_boundary(
     ("threshold", "message"),
     [
         (">=", "include a number"),
-        ("=>26", "valid comparison rule"),
-        ("abc", "valid comparison rule"),
+        ("=>26", "start with a comparison operator"),
+        ("abc", "start with a comparison operator"),
         (">=abc", "valid comparison rule"),
-        ("nan", "finite number"),
+        ("nan", "start with a comparison operator"),
         (">=inf", "finite number"),
     ],
 )
